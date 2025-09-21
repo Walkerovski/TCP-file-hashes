@@ -9,11 +9,26 @@
 
 
 // sendAny: sends a buffer over a socket.
-inline void sendAny(int& sockfd, const void* data, uint32_t size, const char* errMsg) {
+inline void sendAny(int& sockfd, const void* data, ssize_t size, const char* errMsg) {
     ssize_t sent = send(sockfd, data, size, 0);
-    if (sent != static_cast<ssize_t>(size))
+    if (sent != size)
         throw std::runtime_error(errMsg);
 }
+
+// receiveAny: receives a buffer sent over a socket.
+inline void receiveAny(int sockfd, void* bytes_received, ssize_t size, const char* errMsg) {
+    ssize_t total = 0;
+    char* buffer = reinterpret_cast<char*>(bytes_received);
+
+    while (total < size) {
+        ssize_t received = recv(sockfd, buffer + total, size - total, 0);
+        if (received < 0)
+            throw std::runtime_error(errMsg);
+
+        total += received;
+    }
+}
+
 
 // InitRequest: sent by client to initialize communication
 struct InitRequest {
@@ -28,6 +43,10 @@ struct InitRequest {
     void sendTo(int& sockfd) const {
         sendAny(sockfd, &Type, sizeof(Type), "Sending type failed!");
         sendAny(sockfd, &N, sizeof(N), "Sending number of hashes failed!");
+    }
+
+    void receive(int& sockfd) {
+        receiveAny(sockfd, this, sizeof(*this), "Receiving an initialisation failed!");
     }
 };
 
@@ -45,6 +64,10 @@ struct AckResponse {
         sendAny(sockfd, &Type, sizeof(Type), "Sending type failed!");
         sendAny(sockfd, &Length, sizeof(Length), "Sending length failed!");
     }
+
+    void receive(int& sockfd) {
+        receiveAny(sockfd, this, sizeof(*this), "Receiving an acknowledgement failed!");
+    }
 };
 
 // HashRequest: client sends data to be hashed
@@ -57,13 +80,21 @@ struct HashRequest {
         Type = htonl(3);
         Length = htonl(length);
         Payload.resize(length);
-        fread(Payload.data(), 1, length, file);
+        if (fread(Payload.data(), 1, length, file) != size_t(length))
+            throw std::runtime_error("Failed to read expected payload from file");
     }
 
     void sendTo(int& sockfd) const {
         sendAny(sockfd, &Type, sizeof(Type), "Sending type failed!");
         sendAny(sockfd, &Length, sizeof(Length), "Sending length failed!");
         sendAny(sockfd, Payload.data(), Payload.size(), "Sending payload failed!");
+    }
+
+    void receive(int& sockfd) {
+        receiveAny(sockfd, &Type, sizeof(Type), "Receiving a HashRequest's Type failed!");
+        receiveAny(sockfd, &Length, sizeof(Length), "Receiving a HashRequest's Length failed!");
+        Payload.resize(ntohl(Length));
+        receiveAny(sockfd, Payload.data(), Payload.size(), "Receiving a HashRequest's Payload failed!");
     }
 };
 
@@ -84,7 +115,12 @@ struct HashResponse {
         sendAny(sockfd, &I, sizeof(I), "Sending index failed!");
         sendAny(sockfd, &Hash, sizeof(Hash), "Sending hash failed!");
     }
-};
 
+    void receive(int& sockfd) {
+        receiveAny(sockfd, &Type, sizeof(Type), "Receiving a HashRequest's Type failed!");
+        receiveAny(sockfd, &I, sizeof(I), "Receiving a HashRequest's Index failed!");
+        receiveAny(sockfd, &Hash, sizeof(Hash), "Receiving a Hash failed!");
+    }
+};
 
 #endif // REQUESTS_H

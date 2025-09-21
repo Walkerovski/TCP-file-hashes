@@ -35,6 +35,6 @@ error_t server_parser(int key, char *arg, struct argp_state *state);
  * Uses argp with server_parser for validation. On success, prints the
  * parsed values; on error, reports via argp_error or prints a message.
  */
-void server_parseopt(int argc, char *argv[]);
+void server_parseopt(server_arguments& args, int argc, char *argv[]);
 
 #endif // PARSER_SERVER_H

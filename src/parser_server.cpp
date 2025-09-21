@@ -8,8 +8,8 @@
 using namespace std;
 
 bool isNumber(const string& s) {
-    for (auto it=s.begin(); it != s.end(); ++it) {
-        if (!isdigit(*it))
+    for (char it:s) {
+        if (!isdigit(it))
 			return false;
     }
     return true;
@@ -23,9 +23,10 @@ error_t server_parser(int key, char *arg, struct argp_state *state) {
 		if (!isNumber(arg))
 			argp_error(state, "Invalid option for a port, must be a number!");
 
-		args->port = atoi(arg);
-		if (args->port < 1025 || args->port > 65535)
+		if (atoi(arg) < 1025 || atoi(arg) > 65535)
 			argp_error(state, "Port is supposed to be a value in between 1025 and 65535!");
+
+		args->port = atoi(arg);
 
 		break;
 	case 's':
@@ -44,10 +45,8 @@ error_t server_parser(int key, char *arg, struct argp_state *state) {
 	return ret;
 }
 
-void server_parseopt(int argc, char *argv[]) {
-	server_arguments args{};
-
-	struct argp_option options[] = {
+void server_parseopt(server_arguments& args, int argc, char *argv[]) {
+		struct argp_option options[] = {
 		{ "port", 'p', "port", 0, "The port to be used for the server", 0},
 		{ "salt", 's', "salt", 0, "The salt to be used for the server. Zero by default", 0},
 		{ 0, 0, 0, 0, 0, 0 }
