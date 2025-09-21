@@ -1,4 +1,3 @@
-#include "hash.h"
 #include "parser_client.h"
 
 #include <iostream>
@@ -9,8 +8,8 @@
 using namespace std;
 
 bool isNumber(const string& s) {
-    for (auto it=s.begin(); it != s.end(); ++it) {
-        if (!isdigit(*it)) return false;
+    for (char it:s) {
+        if (!isdigit(it)) return false;
     }
     return true;
 }
@@ -23,15 +22,17 @@ error_t client_parser(int key, char *arg, struct argp_state *state) {
         if (inet_pton(AF_INET, arg, &args->addr.sin_addr) <= 0)
             argp_error(state, "Invalid address");
 
+		args->addr.sin_family = AF_INET;
+
 		break;
 	case 'p':
 		if (!isNumber(arg))
 			argp_error(state, "Invalid option for a port, must be a number!");
 
-		args->addr.sin_port = atoi(arg);
 		if (atoi(arg) < 1025 || atoi(arg) > 65535)
 			argp_error(state, "Port is supposed to be a value in between 1025 and 65535!");
 
+		args->addr.sin_port = htons(atoi(arg));
 		break;
 	case 'n':
 		if (!isNumber(arg))
@@ -87,10 +88,7 @@ error_t client_parser(int key, char *arg, struct argp_state *state) {
 	return ret;
 }
 
-
-void client_parseopt(int argc, char *argv[]) {
-	client_arguments args{};
-
+void client_parseopt(client_arguments& args, int argc, char *argv[]) {
 	struct argp_option options[] = {
 		{ "addr", 'a', "addr", 0, "The IP address the server is listening at", 0},
 		{ "port", 'p', "port", 0, "The port that is being used at the server", 0},
@@ -106,6 +104,6 @@ void client_parseopt(int argc, char *argv[]) {
 	if (argp_parse(&argp_settings, argc, argv, 0, NULL, &args) != 0)
 		cout << "Got an error condition when parsing\n";
 
-	cout << "Got " << inet_ntoa(args.addr.sin_addr) << " on port " << args.addr.sin_port << " with n="
+	cout << "Got " << inet_ntoa(args.addr.sin_addr) << " on port " << ntohs(args.addr.sin_port) << " with n="
         << args.hashnum << " smin=" << args.smin << " smax=" << args.smax << " filename=" << args.filename << "\n";
 }

@@ -40,6 +40,6 @@ error_t client_parser(int key, char *arg, struct argp_state *state);
  * delegates validation to client_parser, and fills a client_arguments struct.
  * On parse failure, prints an error; on success, prints the parsed values.
  */
-void client_parseopt(int argc, char *argv[]);
+void client_parseopt(client_arguments& args, int argc, char *argv[]);
 
 #endif // PARSER_CLIENT_H
