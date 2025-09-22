@@ -6,6 +6,13 @@
 
 using namespace std;
 
+std::ostream& operator<<(std::ostream& os, HashResponse const& resp) {
+    os << "0x";
+    for (char b : resp.Hash) {
+        os << std::hex << int(b);
+    }
+    return os;
+}
 
 void initializeSocket(client_arguments& args, int& sockfd) {
     if (connect(sockfd, (struct sockaddr *)&args.addr, sizeof(args.addr)) < 0)
@@ -27,8 +34,17 @@ int main(int argc, char *argv[]) {
     initreq.setValues(args.hashnum);
     initreq.sendTo(sockfd);
 
-    HashRequest hashreq;
-    int L = args.smin + rand() % (args.smax - args.smin + 1);
-    hashreq.setValues(L, args.file);
-    hashreq.sendTo(sockfd);
+    AckResponse ack;
+    ack.receive(sockfd);
+
+    for (int i = 0; i < args.hashnum; ++i) {
+        HashRequest hashreq;
+        int L = args.smin + rand() % (args.smax - args.smin + 1);
+        hashreq.setValues(L, args.file);
+        hashreq.sendTo(sockfd);
+
+        HashResponse resp{};
+        resp.receive(sockfd);
+        cout << i << ": " << resp << "\n";
+    }
 }

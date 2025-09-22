@@ -41,6 +41,20 @@ int main(int argc, char *argv[]) {
 
     InitRequest init;
     init.receive(client_fd);
-    cout << ntohl(init.Type) << "\n";
-    cout << ntohl(init.N) << "\n";
+    int N = ntohl(init.N);
+
+    AckResponse ack{};
+    ack.setValues(2, N*40);
+    ack.sendTo(client_fd);
+    for (int i = 0; i < int(ntohl(init.N)); ++i) {
+
+        HashRequest req{};
+        req.receive(client_fd);
+
+        HashResponse resp{};
+        resp.setValues(4, i);
+        //resp.Hash = calchash(req.Payload);
+        resp.Hash.fill(0);
+        resp.sendTo(client_fd);
+    }
 }
