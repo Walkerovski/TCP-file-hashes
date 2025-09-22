@@ -5,10 +5,11 @@
 #include <iostream>
 #include <cstring>
 #include <unistd.h>
+#include <thread>
 
 using namespace std;
 
-bool initializeSocket(server_arguments& args, int& sockfd, int& client_fd) {
+bool initializeSocket(server_arguments& args, int& sockfd) {
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
@@ -30,32 +31,10 @@ bool initializeSocket(server_arguments& args, int& sockfd, int& client_fd) {
         return true;
     }
 
-    socklen_t addrlen = sizeof(addr);
-    client_fd = accept(sockfd, (struct sockaddr*)&addr, &addrlen);
-    if (client_fd < 0) {
-        cerr << "accept() failed while waiting for client: " << strerror(errno) << "\n";
-        return true;
-    }
-    cout << "Awaiting connections\n";
     return false;
 }
 
-int main(int argc, char *argv[]) {
-    server_arguments args{};
-    server_parseopt(args, argc, argv);
-
-    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0) {
-        std::cerr << "socket() failed: " << strerror(errno) << "\n";
-        return 1;
-    }
-
-    int client_fd;
-    if(initializeSocket(args, sockfd, client_fd)) {
-        cerr << "Server setup failed. Exiting cleanly.\n";
-        close(sockfd);
-        return 1;
-    }
+void handle_client(int client_fd, server_arguments args) {
     InitRequest init;
     init.receive(client_fd);
     int N = ntohl(init.N);
@@ -63,8 +42,8 @@ int main(int argc, char *argv[]) {
     AckResponse ack{};
     ack.setValues(2, N*40);
     ack.sendTo(client_fd);
-    for (int i = 0; i < int(ntohl(init.N)); ++i) {
 
+    for (int i = 0; i < N; ++i) {
         HashRequest req{};
         req.receive(client_fd);
 
@@ -72,5 +51,29 @@ int main(int argc, char *argv[]) {
         resp.setValues(4, i);
         resp.Hash = compute_checksum(req.Payload, args.salt);
         resp.sendTo(client_fd);
+    }
+    close(client_fd);
+}
+
+
+int main(int argc, char *argv[]) {
+    server_arguments args{};
+    server_parseopt(args, argc, argv);
+
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);;
+    if(initializeSocket(args, sockfd)) {
+        cerr << "Server setup failed. Exiting cleanly.\n";
+        close(sockfd);
+        return 1;
+    }
+
+    while (true) {
+        int client_fd = accept(sockfd, nullptr, nullptr);
+        if (client_fd < 0) {
+            cerr << "accept() failed: " << strerror(errno) << "\n";
+            continue;
+        }
+        thread t(handle_client, client_fd, args);
+        t.detach();
     }
 }
