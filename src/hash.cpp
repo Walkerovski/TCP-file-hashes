@@ -1,13 +1,9 @@
 #include <string.h>
 #include <strings.h>
 #include <iostream>
-
-#include "hash.h"
-
-/* third party libraries */
 #include <openssl/evp.h>
 
-/* You shouldn't have to be looking at this file, but have fun! */
+#include "hash.h"
 
 using namespace std;
 
