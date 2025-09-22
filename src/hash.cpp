@@ -1,5 +1,6 @@
 #include <string.h>
 #include <strings.h>
+#include <iostream>
 
 #include "hash.h"
 
@@ -8,6 +9,7 @@
 
 /* You shouldn't have to be looking at this file, but have fun! */
 
+using namespace std;
 
 struct checksum_ctx {
 	EVP_MD_CTX *ctx;
@@ -51,9 +53,6 @@ struct checksum_ctx * checksum_create(const uint8_t *salt, size_t len) {
 	csm = NULL;
 
 	return csm;
-
-		
-	
 }
 
 int checksum_update(struct checksum_ctx *csm, const uint8_t *payload) {
@@ -88,4 +87,38 @@ int checksum_destroy(struct checksum_ctx *csm) {
 	bzero(csm, sizeof(*csm));
 	free(csm);
 	return 0;
+}
+
+array<uint8_t, 32> compute_checksum(const vector<uint8_t>& payload, const string& salt) {
+	array<uint8_t, 32> digest{};  
+	const uint8_t* salt_ptr = salt.empty() ? nullptr
+                                           : reinterpret_cast<const uint8_t*>(salt.data());
+
+    checksum_ctx* ctx = checksum_create(salt_ptr, salt.size());
+    if (!ctx) {
+        cerr << "Failed to create checksum context\n";
+        return {};
+    }
+
+    size_t offset = 0;
+	size_t length = payload.size();
+    while (length - offset >= UPDATE_PAYLOAD_SIZE) {
+        if (checksum_update(ctx, payload.data() + offset) != 0) {
+            cerr << "checksum_update failed\n";
+            checksum_destroy(ctx);
+            return {};
+        }
+        offset += UPDATE_PAYLOAD_SIZE;
+    }
+
+    size_t remaining = length - offset;
+    if (checksum_finish(ctx, payload.data() + offset, remaining, digest.data()) != 0) {
+        cerr << "checksum_finish failed\n";
+        checksum_destroy(ctx);
+        return {};
+    }
+
+    checksum_destroy(ctx);
+
+    return digest;
 }

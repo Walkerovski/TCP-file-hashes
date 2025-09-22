@@ -3,14 +3,16 @@
 
 #include <iostream>
 #include <random>
+#include <iomanip> 
 
 using namespace std;
 
-std::ostream& operator<<(std::ostream& os, HashResponse const& resp) {
+ostream& operator<<(ostream& os, HashResponse const& resp) {
     os << "0x";
-    for (char b : resp.Hash) {
-        os << std::hex << int(b);
+    for (unsigned char b : resp.Hash) {
+        os << hex << setw(2) << setfill('0') << int(b);
     }
+    os << dec;
     return os;
 }
 

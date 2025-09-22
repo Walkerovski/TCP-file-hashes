@@ -6,19 +6,22 @@
 
 using namespace std;
 
-
 void initializeSocket(server_arguments& args, int& sockfd, int& client_fd) {
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
     addr.sin_port = htons(args.port);
 
+    int yes = 1;
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0)
+        throw runtime_error("setsockopt(SO_REUSEADDR) failed!");
+
     if (bind(sockfd, (struct sockaddr*)&addr, sizeof(addr)) < 0)
         throw runtime_error("Binding failed!");
     cout << "Socket created and bound to the port\n";
 
     if (listen(sockfd, 1) < 0)
-        throw runtime_error("Listen failed!");
+        throw runtime_error("Listen failed!");  
     cout << "Listning on port: " << args.port << "\n";
 
     socklen_t addrlen = sizeof(addr);
@@ -53,8 +56,7 @@ int main(int argc, char *argv[]) {
 
         HashResponse resp{};
         resp.setValues(4, i);
-        //resp.Hash = calchash(req.Payload);
-        resp.Hash.fill(0);
+        resp.Hash = compute_checksum(req.Payload, args.salt);
         resp.sendTo(client_fd);
     }
 }
