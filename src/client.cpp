@@ -3,7 +3,9 @@
 
 #include <iostream>
 #include <random>
-#include <iomanip> 
+#include <iomanip>
+#include <unistd.h>
+#include <cstring>
 
 using namespace std;
 
@@ -16,21 +18,21 @@ ostream& operator<<(ostream& os, HashResponse const& resp) {
     return os;
 }
 
-void initializeSocket(client_arguments& args, int& sockfd) {
-    if (connect(sockfd, (struct sockaddr *)&args.addr, sizeof(args.addr)) < 0)
-        throw runtime_error("Connection failed!");
-    cout << "Socket initialized!" << "\n";
-}
-
 int main(int argc, char *argv[]) {
     client_arguments args{};
     client_parseopt(args, argc, argv);
 
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0)
-        throw runtime_error("Socket init failed!");
+    if (sockfd < 0) {
+        std::cerr << "socket() failed: " << strerror(errno) << "\n";
+        return 1;
+    }
 
-    initializeSocket(args, sockfd);
+    if (connect(sockfd, (struct sockaddr *)&args.addr, sizeof(args.addr)) < 0) {
+        cerr << "Connecting to server failed. Exiting cleanly.\n";
+        close(sockfd);
+        return 1;
+    }
 
     InitRequest initreq;
     initreq.setValues(args.hashnum);
