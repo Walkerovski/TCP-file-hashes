@@ -25,12 +25,12 @@ int main(int argc, char *argv[]) {
 
         int sockfd = socket(AF_INET, SOCK_STREAM, 0);
         if (sockfd < 0) {
-            std::cerr << "socket() failed: " << strerror(errno) << "\n";
+            cerr << "socket() failed: " << strerror(errno) << "\n";
             return 1;
         }
 
         if (connect(sockfd, (struct sockaddr *)&args.addr, sizeof(args.addr)) < 0) {
-            cerr << "Connecting to server failed. Exiting cleanly.\n";
+            cerr << "connect() failed: " << strerror(errno) << "\n";
             close(sockfd);
             return 1;
         }

@@ -16,7 +16,7 @@ The protocol uses four message types:
 
 ### Usage
 ```bash
-server -p <port> [-s <salt>]
+server -p <port> -s <salt>
 ```
 
 ### Arguments

@@ -18,7 +18,7 @@ bool initializeSocket(server_arguments& args, int sockfd) {
 
     int yes = 1;
     if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
-        cerr << "setsockopt(SO_REUSEADDR) failed: " << strerror(errno) << "\n";
+        cerr << "setsockopt() failed: " << strerror(errno) << "\n";
         return true;
     }
 
