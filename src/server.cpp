@@ -6,10 +6,11 @@
 #include <cstring>
 #include <unistd.h>
 #include <thread>
+#include <arpa/inet.h>
 
 using namespace std;
 
-bool initializeSocket(server_arguments& args, int& sockfd) {
+bool initializeSocket(server_arguments& args, int sockfd) {
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
@@ -40,14 +41,14 @@ void handle_client(int client_fd, server_arguments args) {
     int N = ntohl(init.N);
 
     AckResponse ack{};
-    ack.setValues(2, N*40);
+    ack.setValues(MessageType::AckResponse, N*40);
     ack.sendTo(client_fd);
 
     for (int i = 0; i < N; ++i) {
         HashRequest req{};
         HashResponse resp{};
 
-        resp.setValues(4, i);
+        resp.setValues(MessageType::HashResponse, i);
         resp.Hash = req.receive(client_fd, args.salt);
         resp.sendTo(client_fd);
     }

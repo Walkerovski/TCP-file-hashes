@@ -4,162 +4,105 @@
 #include <cstdint>
 #include <vector>
 #include <array>
-#include <stdexcept>
-#include <arpa/inet.h>
-#include "hash.h"
+#include <string>
 
+struct checksum_ctx;
 
-// sendAny: sends a buffer over a socket.
-inline void sendAny(int& sockfd, const void* data, ssize_t size, const char* errMsg) {
-    ssize_t sent = send(sockfd, data, size, 0);
-    if (sent != size)
-        throw std::runtime_error(errMsg);
-}
+/* Protocol Message Types */
+enum class MessageType : uint32_t {
+    InitRequest  = 1,
+    AckResponse  = 2,
+    HashRequest  = 3,
+    HashResponse = 4
+};
 
-// receiveAny: receives a buffer sent over a socket.
-inline void receiveAny(int sockfd, void* bytes_received, ssize_t size, const char* errMsg) {
-    ssize_t total = 0;
-    char* buffer = reinterpret_cast<char*>(bytes_received);
+/**
+ * @brief Send a buffer over a socket.
+ *
+ * Attempts to send exactly @p size bytes from @p data using the socket
+ * file descriptor @p sockfd. If the number of bytes sent does not match
+ * the requested size, a std::runtime_error is thrown.
+ *
+ * @param sockfd   Socket file descriptor.
+ * @param data     Pointer to the buffer to send.
+ * @param size     Number of bytes to send.
+ * @param errMsg   Error message included in the exception if sending fails.
+ *
+ * @throws std::runtime_error if sending fails or fewer than @p size bytes are sent.
+ */
+void sendAny(int sockfd, const void* data, ssize_t size, const char* errMsg);
 
-    while (total < size) {
-        ssize_t received = recv(sockfd, buffer + total, size - total, 0);
-        if (received <= 0)
-            throw std::runtime_error(errMsg);
+/**
+ * @brief Receive a fixed-size buffer from a socket.
+ *
+ * Reads exactly @p size bytes into @p buffer from the socket @p sockfd.
+ * The function will loop until all bytes are received or an error occurs.
+ *
+ * @param sockfd   Socket file descriptor.
+ * @param buffer   Pointer to the buffer where received data will be stored.
+ * @param size     Number of bytes to receive.
+ * @param errMsg   Error message included in the exception if receiving fails.
+ *
+ * @throws std::runtime_error if the socket is closed or an error occurs.
+ */
+void receiveAny(int sockfd, void* buffer, ssize_t size, const char* errMsg);
 
-        total += received;
-    }
-}
+/**
+ * @brief Receive a payload from a socket and compute its checksum hash.
+ *
+ * Reads exactly @p size bytes from the socket @p sockfd in chunks,
+ * updating the checksum as data arrives. If a @p salt is provided,
+ * it is included in the checksum computation. When all data is received,
+ * the final 32-byte digest is returned.
+ *
+ * @param sockfd   Socket file descriptor.
+ * @param size     Number of bytes to receive.
+ * @param salt     Optional string used as checksum salt (may be empty).
+ * @param errMsg   Error message included in the exception if receiving fails.
+ *
+ * @return std::array<uint8_t, 32>  Final computed hash digest.
+ *
+ * @throws std::runtime_error on socket errors or checksum API errors.
+ */
+std::array<uint8_t, 32> receiveHash(int sockfd, ssize_t size, const std::string& salt, const char* errMsg);
 
-// receiveHash: receives a payload and calculates the hash.
-inline std::array<uint8_t, 32> receiveHash(int sockfd, ssize_t size, const std::string& salt, const char* errMsg) {
-    const ssize_t CHUNK = UPDATE_PAYLOAD_SIZE;
-    std::array<uint8_t, 32> digest{};
-    char buffer[CHUNK];
-
-    const uint8_t* salt_ptr = salt.empty() ? nullptr
-                                           : reinterpret_cast<const uint8_t*>(salt.data());
-
-    checksum_ctx* ctx = checksum_create(salt_ptr, salt.size());
-    if (!ctx)
-        throw std::runtime_error("Failed to create checksum context");
-
-    ssize_t total = 0;
-    while (total < size) {
-        ssize_t toRead = std::min(CHUNK, size - total);
-        ssize_t received = recv(sockfd, buffer, toRead, 0);
-        if (received < 0) {
-            checksum_destroy(ctx);
-            throw std::runtime_error(errMsg);
-        }
-
-        total += received;
-
-        if (total < size) {
-            if (checksum_update(ctx, reinterpret_cast<uint8_t*>(buffer)) != 0) {
-                checksum_destroy(ctx);
-                throw std::runtime_error("checksum_update failed");
-            }
-        } else {
-            if (checksum_finish(ctx, reinterpret_cast<uint8_t*>(buffer), received, digest.data()) != 0) {
-                checksum_destroy(ctx);
-                throw std::runtime_error("checksum_finish failed");
-            }
-        }
-    }
-    checksum_destroy(ctx);
-    return digest;
-}
-
-// InitRequest: sent by client to initialize communication
+/* Protocol Structures */
 struct InitRequest {
     uint32_t Type;
     uint32_t N;
 
-    void setValues(int n) {
-        Type = htonl(1);
-        N = htonl(n);
-    }
-
-    void sendTo(int& sockfd) const {
-        sendAny(sockfd, &Type, sizeof(Type), "Sending initialisation's type failed!");
-        sendAny(sockfd, &N, sizeof(N), "Sending initialisation's number of hashes failed!");
-    }
-
-    void receive(int& sockfd) {
-        receiveAny(sockfd, this, sizeof(*this), "Receiving an initialisation failed!");
-    }
+    void setValues(int n);
+    void sendTo(int sockfd) const;
+    void receive(int sockfd);
 };
 
-// AckResponse: server acknowledgment
 struct AckResponse {
     uint32_t Type;
     uint32_t Length;
 
-    void setValues(int type, int length) {
-        Type = htonl(type);
-        Length = htonl(length);
-    }
-
-    void sendTo(int& sockfd) const {
-        sendAny(sockfd, &Type, sizeof(Type), "Sending acknowledgement's type failed!");
-        sendAny(sockfd, &Length, sizeof(Length), "Sending acknowledgement's length failed!");
-    }
-
-    void receive(int& sockfd) {
-        receiveAny(sockfd, this, sizeof(*this), "Receiving an acknowledgement failed!");
-    }
+    void setValues(MessageType type, int length);
+    void sendTo(int sockfd) const;
+    void receive(int sockfd);
 };
 
-// HashRequest: client sends data to be hashed
 struct HashRequest {
     uint32_t Type;
     uint32_t Length;
     std::vector<uint8_t> Payload;
 
-    void setValues(int length, FILE* file) {
-        Type = htonl(3);
-        Length = htonl(length);
-        Payload.resize(length);
-        if (fread(Payload.data(), 1, length, file) != size_t(length))
-            throw std::runtime_error("Failed to read expected payload from file");
-    }
-
-    void sendTo(int& sockfd) const {
-        sendAny(sockfd, &Type, sizeof(Type), "Sending a HashRequest's type failed!");
-        sendAny(sockfd, &Length, sizeof(Length), "Sending a HashRequest's length failed!");
-        sendAny(sockfd, Payload.data(), Payload.size(), "Sending a HashRequest's payload failed!");
-    }
-
-    std::array<uint8_t, 32> receive(int& sockfd, std::string& salt) {
-        receiveAny(sockfd, &Type, sizeof(Type), "Receiving a HashRequest's type failed!");
-        receiveAny(sockfd, &Length, sizeof(Length), "Receiving a HashRequest's length failed!");
-        return receiveHash(sockfd, ntohl(Length), salt, "Receiving a HashRequest's payload failed!");
-    }
+    void setValues(int length, FILE* file);
+    void sendTo(int sockfd) const;
+    std::array<uint8_t, 32> receive(int sockfd, const std::string& salt);
 };
 
-// HashResponse: server returns hash result
 struct HashResponse {
     uint32_t Type;
     uint32_t I;
     std::array<uint8_t, 32> Hash;
 
-
-    void setValues(int type, int i) {
-        Type = htonl(type);
-        I = htonl(i);
-    }
-
-    void sendTo(int& sockfd) const {
-        sendAny(sockfd, &Type, sizeof(Type), "Sending a HashRequest's type failed!");
-        sendAny(sockfd, &I, sizeof(I), "Sending a HashRequest's index failed!");
-        sendAny(sockfd, &Hash, sizeof(Hash), "Sending a hash failed!");
-    }
-
-    void receive(int& sockfd) {
-        receiveAny(sockfd, &Type, sizeof(Type), "Receiving a HashRequest's type failed!");
-        receiveAny(sockfd, &I, sizeof(I), "Receiving a HashRequest's index failed!");
-        receiveAny(sockfd, &Hash, sizeof(Hash), "Receiving a hash failed!");
-    }
+    void setValues(MessageType type, int i);
+    void sendTo(int sockfd) const;
+    void receive(int sockfd);
 };
 
 #endif // REQUESTS_H
