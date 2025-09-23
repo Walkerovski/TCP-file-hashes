@@ -6,6 +6,7 @@
 #include <array>
 #include <stdexcept>
 #include <arpa/inet.h>
+#include "hash.h"
 
 
 // sendAny: sends a buffer over a socket.
@@ -29,6 +30,45 @@ inline void receiveAny(int sockfd, void* bytes_received, ssize_t size, const cha
     }
 }
 
+// receiveHash: receives a payload and calculates the hash.
+inline std::array<uint8_t, 32> receiveHash(int sockfd, ssize_t size, const std::string& salt, const char* errMsg) {
+    const ssize_t CHUNK = UPDATE_PAYLOAD_SIZE;
+    std::array<uint8_t, 32> digest{};
+    char buffer[CHUNK];
+
+    const uint8_t* salt_ptr = salt.empty() ? nullptr
+                                           : reinterpret_cast<const uint8_t*>(salt.data());
+
+    checksum_ctx* ctx = checksum_create(salt_ptr, salt.size());
+    if (!ctx)
+        throw std::runtime_error("Failed to create checksum context");
+
+    ssize_t total = 0;
+    while (total < size) {
+        ssize_t toRead = std::min(CHUNK, size - total);
+        ssize_t received = recv(sockfd, buffer, toRead, 0);
+        if (received < 0) {
+            checksum_destroy(ctx);
+            throw std::runtime_error(errMsg);
+        }
+
+        total += received;
+
+        if (total < size) {
+            if (checksum_update(ctx, reinterpret_cast<uint8_t*>(buffer)) != 0) {
+                checksum_destroy(ctx);
+                throw std::runtime_error("checksum_update failed");
+            }
+        } else {
+            if (checksum_finish(ctx, reinterpret_cast<uint8_t*>(buffer), received, digest.data()) != 0) {
+                checksum_destroy(ctx);
+                throw std::runtime_error("checksum_finish failed");
+            }
+        }
+    }
+    checksum_destroy(ctx);
+    return digest;
+}
 
 // InitRequest: sent by client to initialize communication
 struct InitRequest {
@@ -90,11 +130,10 @@ struct HashRequest {
         sendAny(sockfd, Payload.data(), Payload.size(), "Sending a HashRequest's payload failed!");
     }
 
-    void receive(int& sockfd) {
+    std::array<uint8_t, 32> receive(int& sockfd, std::string& salt) {
         receiveAny(sockfd, &Type, sizeof(Type), "Receiving a HashRequest's type failed!");
         receiveAny(sockfd, &Length, sizeof(Length), "Receiving a HashRequest's length failed!");
-        Payload.resize(ntohl(Length));
-        receiveAny(sockfd, Payload.data(), Payload.size(), "Receiving a HashRequest's payload failed!");
+        return receiveHash(sockfd, ntohl(Length), salt, "Receiving a HashRequest's payload failed!");
     }
 };
 

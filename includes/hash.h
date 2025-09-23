@@ -44,7 +44,4 @@ int checksum_reset(struct checksum_ctx*);
  * with the context */
 int checksum_destroy(struct checksum_ctx*);
 
-/* Computes checksum based on the provided file and salt */
-std::array<uint8_t, 32> compute_checksum(const std::vector<uint8_t>& payload, const std::string& salt);
-
 #endif

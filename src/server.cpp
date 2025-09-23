@@ -45,11 +45,10 @@ void handle_client(int client_fd, server_arguments args) {
 
     for (int i = 0; i < N; ++i) {
         HashRequest req{};
-        req.receive(client_fd);
-
         HashResponse resp{};
+
         resp.setValues(4, i);
-        resp.Hash = compute_checksum(req.Payload, args.salt);
+        resp.Hash = req.receive(client_fd, args.salt);
         resp.sendTo(client_fd);
     }
     close(client_fd);
