@@ -42,7 +42,7 @@ client -a <address> -p <port> -n <count> --smin <min_size> --smax <max_size> -f 
 ```
 
 ### Arguments
-- `-a <String>`: Server IP address (e.g., "128.8.126.63")
+- `-a <String>`: Server IP address
 - `-p <Number>`: Server port number
 - `-n <Number>`: Number of hash requests to send (≥ 0)
 - `--smin <Number>`: Minimum segment size (≥ 1)

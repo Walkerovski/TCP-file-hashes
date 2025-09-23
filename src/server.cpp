@@ -36,21 +36,28 @@ bool initializeSocket(server_arguments& args, int sockfd) {
 }
 
 void handle_client(int client_fd, server_arguments args) {
-    InitRequest init;
-    init.receive(client_fd);
-    int N = ntohl(init.N);
+    try {
+        InitRequest init;
+        init.receive(client_fd);
+        int N = ntohl(init.N);
 
-    AckResponse ack{};
-    ack.setValues(MessageType::AckResponse, N*40);
-    ack.sendTo(client_fd);
+        AckResponse ack{};
+        ack.setValues(MessageType::AckResponse, N*40);
+        ack.sendTo(client_fd);
 
-    for (int i = 0; i < N; ++i) {
-        HashRequest req{};
-        HashResponse resp{};
+        for (int i = 0; i < N; ++i) {
+            HashRequest req{};
+            HashResponse resp{};
 
-        resp.setValues(MessageType::HashResponse, i);
-        resp.Hash = req.receive(client_fd, args.salt);
-        resp.sendTo(client_fd);
+            resp.setValues(MessageType::HashResponse, i);
+            resp.Hash = req.receive(client_fd, args.salt);
+            resp.sendTo(client_fd);
+        }
+    }
+    catch (const exception &ex) {
+        cerr << "Error: " << ex.what() << "\n";
+    } catch (...) {
+        cerr << "Unknown error occurred\n";
     }
     close(client_fd);
 }
